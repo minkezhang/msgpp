@@ -21,7 +21,7 @@ namespace msgpp {
 
 			// send to a persistent endpoint
 			size_t send(std::string message, std::string hostname, size_t port);
-			std::string read(size_t len, std::string hostname, size_t port);
+			std::string recv(size_t len, std::string hostname, size_t port);
 
 			// cf. http://bit.ly/1nqOnyd
 			static void term(int p);

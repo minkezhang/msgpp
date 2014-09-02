@@ -29,7 +29,7 @@ void msgpp::MessageNode::dn() {
 }
 
 size_t send(std::string message, std::string hostname, size_t port) { return(0); }
-std::string read(size_t len, std::string hostname, size_t port) { return(""); }
+std::string recv(size_t len, std::string hostname, size_t port) { return(""); }
 
 void msgpp::MessageNode::term(int p) {
 	std::lock_guard<std::mutex> lock(msgpp::MessageNode::l);
