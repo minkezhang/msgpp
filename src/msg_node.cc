@@ -20,6 +20,9 @@ std::string msgpp::MessageNode::get_hostname() { return(this->hostname); }
 size_t msgpp::MessageNode::get_port() { return(this->port); }
 
 void msgpp::MessageNode::up() {
+	if(*flag == 1) {
+		return;
+	}
 	{
 		std::lock_guard<std::mutex> lock(msgpp::MessageNode::l);
 		if(msgpp::MessageNode::instances.size() == 0) {
@@ -30,11 +33,13 @@ void msgpp::MessageNode::up() {
 	*flag = 1;
 	while(*(this->flag));
 }
+
 void msgpp::MessageNode::dn() {
 	*(this->flag) = 0;
 }
 
 size_t msgpp::MessageNode::send(std::string message, std::string hostname, size_t port) { return(0); }
+
 std::string msgpp::MessageNode::recv(size_t len, std::string hostname, size_t port) {
 	std::lock_guard<std::recursive_mutex> lock(this->messages_l);
 	if(!this->messages.empty()) {

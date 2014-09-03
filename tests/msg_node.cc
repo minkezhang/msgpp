@@ -34,3 +34,7 @@ TEST_CASE("msgpp|msg_node") {
 
 	t.at(0).join();
 }
+
+TEST_CASE("msgpp|msg_node-recv") {
+	auto n = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 0));
+}
