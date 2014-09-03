@@ -13,8 +13,6 @@
 #include <thread>
 #include <unistd.h>
 
-#include <iostream>
-
 #include "libs/exceptionpp/exception.h"
 
 #include "src/msg_node.h"
@@ -104,7 +102,6 @@ void msgpp::MessageNode::up() {
 		if(client_sock == -1) {
 			std::this_thread::sleep_for(msgpp::MessageNode::increment);
 		} else {
-			std::cout << "found client: " << client_sock << std::endl;
 			fcntl(client_sock, F_SETFL, O_NONBLOCK);
 			std::stringstream len_buf;
 			std::stringstream msg_buf;
@@ -112,18 +109,21 @@ void msgpp::MessageNode::up() {
 			size_t size = 0;
 			while(!is_done) {
 				char tmp_buf[msgpp::MessageNode::size];
+				memset(&tmp_buf, 0, msgpp::MessageNode::size);
 				int n_bytes = 0;
 				time_t start = time(NULL);
 				while(((size_t) time(NULL) - start) < this->timeout) {
 					n_bytes = recv(client_sock, &tmp_buf, msgpp::MessageNode::size, 0);
 					if(n_bytes == -1) {
+						if(errno != EAGAIN) {
+							break;
+						}
 						std::this_thread::sleep_for(msgpp::MessageNode::increment);
 					} else {
 						break;
 					}
 				}
-				std::string tmp = std::string(tmp_buf);
-				std::cout << "tmp: " << tmp << std::endl;
+				std::string tmp = std::string(tmp_buf, msgpp::MessageNode::size);
 				if(n_bytes == 0 || n_bytes == -1) {
 					// client closed unexpectedly
 					// as the message queue is atomically set (i.e., no half-assed data), we will roll back changes and not touch the queue
@@ -140,10 +140,9 @@ void msgpp::MessageNode::up() {
 						msg_buf << tmp.substr(pos + 1);
 					}
 				} else {
-					msg_buf << tmp_buf;
+					msg_buf << tmp;
+					is_done = (msg_buf.str().length() >= size);
 				}
-				is_done = (msg_buf.str().length() >= size);
-				std::cout << msg_buf.str() << std::endl;
 			}
 
 			char host[NI_MAXHOST];
@@ -155,7 +154,6 @@ void msgpp::MessageNode::up() {
 			int r = getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, port, NI_MAXSERV, NI_NUMERICSERV);
 			int s = getnameinfo((struct sockaddr *) &client_addr, client_size, ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
 
-			std::cout << "ip: " << ip << ", host: " << host << ", port: " << port << std::endl;
 			if(is_done && (msg_buf.str().length() == size)) {
 				std::lock_guard<std::mutex> lock(this->messages_l);
 				if (r == 0 && s == 0) {
@@ -163,12 +161,6 @@ void msgpp::MessageNode::up() {
 				} else {
 					this->messages.push_back(msgpp::Message("", "", 0, msg_buf.str()));
 				}
-			} else {
-				std::cout << "is_done? " << is_done << std::endl;
-				std::cout << "size: " << size << std::endl;
-				std::cout << "buf size: " << msg_buf.str().length() << std::endl;
-				std::cout << "buf: " << msg_buf.str() << std::endl;
-				std::cout << "not done...?" << std::endl;
 			}
 			close(client_sock);
 		}
@@ -226,7 +218,6 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 
 	start = time(NULL);
 	while(((size_t) time(NULL) - start) < this->timeout) {
-		std::cout << "sending: " << msg_buf.str() << std::endl;
 		result = send(client_sock, msg_buf.str().c_str(), msg_buf.str().length(), 0);
 		if(result != -1) {
 			n_bytes += result;
@@ -265,7 +256,6 @@ std::string msgpp::MessageNode::pull(std::string hostname, size_t port) {
 				msgpp::Message instance = this->messages.at(i);
 				bool match_h = (instance.get_hostname().compare("") == 0) || (instance.get_ip().compare("") == 0) || (hostname.compare("") == 0) || (hostname.compare(instance.get_hostname()) == 0) || (hostname.compare(instance.get_ip()) == 0);
 				bool match_p = (instance.get_port() == 0) || (port == 0) || (port == instance.get_port());
-				std::cout << "message: " << instance.get_message() << std::endl;
 				if(match_h && match_p) {
 					target = i;
 					is_found = 1;

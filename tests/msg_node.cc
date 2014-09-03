@@ -49,16 +49,15 @@ TEST_CASE("msgpp|msg_node-conn") {
 	auto t = std::thread(&msgpp::MessageNode::up, &*server);
 
 	// check that IPv6 works
-	std::cout << "test" << std::endl;
 	REQUIRE(client->push("test", "::1", server->get_port()) == 4);
-
-	std::cout << "abcdef" << std::endl;
 	REQUIRE(client->push("abcdef", "127.0.0.1", server->get_port()) == 6);
+	REQUIRE(client->push("long long string", "localhost", server->get_port()) == 16);
 
 	raise(SIGINT);
 	t.join();
 
 	REQUIRE(server->pull("", 0).compare("test") == 0);
 	REQUIRE(server->pull("", 0).compare("abcdef") == 0);
+	REQUIRE(server->pull("", 0).compare("long long string") == 0);
 
 }
