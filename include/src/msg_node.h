@@ -41,6 +41,10 @@ namespace msgpp {
 			size_t push(std::string message, std::string hostname, size_t port);
 			std::string pull(std::string hostname = "");
 
+			// get number of messages currently in queue
+			size_t query();
+
+			// SIGINT handler
 			// cf. http://bit.ly/1nqOnyd
 			static void term(int p);
 
@@ -63,6 +67,7 @@ namespace msgpp {
 
 			static std::chrono::milliseconds increment;
 			static const size_t size = 1024;
+			static const size_t max_conn = 100;
 	};
 }
 

@@ -13,6 +13,8 @@
 #include <thread>
 #include <unistd.h>
 
+#include <iostream>
+
 #include "libs/exceptionpp/exception.h"
 
 #include "src/msg_node.h"
@@ -81,7 +83,7 @@ void msgpp::MessageNode::up() {
 	if(status == -1) {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot bind server-side socket"));
 	}
-	status = listen(server_sock, 100);
+	status = listen(server_sock, msgpp::MessageNode::max_conn);
 	if(status == -1) {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot listen on server-side socket"));
 	}
@@ -109,6 +111,7 @@ void msgpp::MessageNode::up() {
 		if(client_sock == -1) {
 			std::this_thread::sleep_for(msgpp::MessageNode::increment);
 		} else {
+			std::cout << "new connection" << std::endl;
 			fcntl(client_sock, F_SETFL, O_NONBLOCK);
 			std::stringstream len_buf;
 			std::stringstream msg_buf;
@@ -158,6 +161,7 @@ void msgpp::MessageNode::up() {
 			if(is_done && (msg_buf.str().length() >= size)) {
 				std::lock_guard<std::mutex> lock(this->messages_l);
 				this->messages.push_back(msgpp::Message(ip, host, msg_buf.str().substr(0, size)));
+				std::cout << "pushed back" << std::endl;
 			}
 			shutdown(client_sock, SHUT_RDWR);
 			close(client_sock);
@@ -173,6 +177,11 @@ void msgpp::MessageNode::up() {
 
 void msgpp::MessageNode::dn() {
 	*(this->flag) = 0;
+}
+
+size_t msgpp::MessageNode::query() {
+	std::lock_guard<std::mutex> lock(this->messages_l);
+	return(this->messages.size());
 }
 
 size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_t port) {
@@ -191,6 +200,7 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	status = getaddrinfo(hostname.c_str(), port_buf.str().c_str(), &info, &list);
 	client_sock = socket(list->ai_family, list->ai_socktype, list->ai_protocol);
 	if(client_sock == -1) {
+		std::cout << "msgpp::MessageNode::push -- cannot open socket" << std::endl;
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot open socket"));
 	}
 
@@ -208,6 +218,7 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	}
 
 	if(status == -1) {
+		std::cout << "msgpp::MessageNode::push -- cannot connect to destination" << std::endl;
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot connect to destination"));
 	}
 
@@ -232,12 +243,15 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	}
 
 	if(result == -1 || n_bytes != msg_buf.str().length()) {
+		std::cout << "msgpp::MessageNode::push -- could not send data" << std::endl;
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "could not send data"));
 	}
 
 	freeaddrinfo(list);
 	shutdown(client_sock, SHUT_RDWR);
 	close(client_sock);
+
+	std::cout << "sent: " << msg_buf.str() << std::endl;
 
 	return(result - (msg_buf.str().length() - message.length()));
 }
