@@ -26,30 +26,56 @@ namespace msgpp {
 
 	class MessageNode : public std::enable_shared_from_this<MessageNode> {
 		public:
+			/**
+			 * protocol -- set to msgpp::MessageNode::ipv6 to support IPv6 addresses
+			 *	else, set set ai_family = AF_UNSPEC in ::up
+			 * timeout -- instance time metric (in seconds) to handle non-blocking sockets
+			 */
 			MessageNode(size_t port, uint8_t protocol = ipv4, size_t timeout = 2);
 
 			uint8_t get_protocol();
 			size_t get_port();
 			size_t get_timeout();
+
 			void set_timeout(size_t timeout);
 
-			// start a persistent incoming socket
+			/**
+			 * start a persistent socket at localhost:PORT
+			 */
 			void up();
+
+			/**
+			 * shutdown the server and close all stray connections
+			 */
 			void dn();
 
-			// send to a persistent endpoint
+			/**
+			 * push MESSAGE to remote HOSTNAME:PORT endpoint
+			 *
+			 * silent_fail -- return 0 on failure instead of throwing exceptionpp::RuntimeError
+			 */
 			size_t push(std::string message, std::string hostname, size_t port, bool silent_fail = false);
+
+			/**
+			 * pull from the message queue filtered by HOSTNAME
+			 *
+			 * silent_fail -- return "" on failure instead of throwing exceptionpp::RuntimeError
+			 */
 			std::string pull(std::string hostname = "", bool silent_fail = false);
 
-			// get number of messages currently in queue
+			/**
+			 * get number of messages currently in queue
+			 */
 			size_t query();
 
-			// SIGINT handler
-			// cf. http://bit.ly/1nqOnyd
+			/**
+			 * SIGINT handler
+			 *	cf. http://bit.ly/1nqOnyd
+			 */
 			static void term(int p);
 
-			static const uint8_t ipv4 = 0;
-			static const uint8_t ipv6 = 1;
+			static const uint8_t ipv4 = 1;
+			static const uint8_t ipv6 = 2;
 
 		private:
 			uint8_t protocol;
