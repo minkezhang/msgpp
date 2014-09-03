@@ -166,11 +166,13 @@ void msgpp::MessageNode::up() {
 					this->messages.push_back(msgpp::Message("", "", 0, msg_buf.str().substr(0, size)));
 				}
 			}
+			shutdown(client_sock, SHUT_RDWR);
 			close(client_sock);
 		}
 	}
 
 	freeaddrinfo(list);
+	shutdown(server_sock, SHUT_RDWR);
 	close(server_sock);
 
 	return;
@@ -242,6 +244,7 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	}
 
 	freeaddrinfo(list);
+	shutdown(client_sock, SHUT_RDWR);
 	close(client_sock);
 
 	return(result - (msg_buf.str().length() - message.length()));
