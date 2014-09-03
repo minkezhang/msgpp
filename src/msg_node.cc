@@ -1,5 +1,15 @@
+#include <cstring>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
 #include <signal.h>
+#include <sstream>
 #include <string>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <iostream>
 
 #include "libs/exceptionpp/exception.h"
 
@@ -33,7 +43,51 @@ void msgpp::MessageNode::up() {
 		msgpp::MessageNode::instances.push_back(this->shared_from_this());
 	}
 	*flag = 1;
-	while(*(this->flag));
+
+	std::stringstream port;
+	port << this->port;
+
+	int server_sock, status;
+	struct addrinfo info;
+	struct addrinfo *list;
+	memset(&info, 0, sizeof(info));
+
+	info.ai_flags = AI_PASSIVE;
+	status = getaddrinfo(NULL, port.str().c_str(), &info, &list);
+	server_sock = socket(list->ai_family, list->ai_socktype, list->ai_protocol);
+	if(server_sock == -1) {
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot open socket"));
+	}
+	int yes = 1;
+	status = setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+	status = bind(server_sock, list->ai_addr, list->ai_addrlen);
+	if(status == -1) {
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot bind server-side socket"));
+	}
+	status = listen(server_sock, 100);
+	if(status == -1) {
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot listen on server-side socket"));
+	}
+
+	struct sockaddr_in client_addr;
+	socklen_t client_size;
+
+	// set as non-blocking
+	//	cf. http://bit.ly/1tse7i3
+	fcntl(server_sock, F_SETFL, O_NONBLOCK);
+
+	int client_sock;
+	while(*(this->flag)) {
+		do {
+			client_sock = accept(server_sock, (struct sockaddr *) &client_addr, &client_size);
+			sleep(1);
+		} while(client_sock == -1);
+		std::cout << "accepted client: " << client_sock << std::endl;
+		close(client_sock);
+	}
+
+	freeaddrinfo(list);
+	close(server_sock);
 }
 
 void msgpp::MessageNode::dn() {

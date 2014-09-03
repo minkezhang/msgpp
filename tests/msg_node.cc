@@ -9,9 +9,9 @@
 #include "src/msg_node.h"
 
 TEST_CASE("msgpp|msg_node") {
-	auto n = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 0));
-	auto m = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 0));
-	auto o = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 0));
+	auto n = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 8080));
+	auto m = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 8081));
+	auto o = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 8082));
 
 	// start up multiple message nodes
 	std::vector<std::thread> t;
@@ -37,9 +37,19 @@ TEST_CASE("msgpp|msg_node") {
 	t.at(0).join();
 }
 
-TEST_CASE("msgpp|msg_node-recv") {
-	auto n = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 0));
+TEST_CASE("msgpp|msg_node-conn") {
+	auto server = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 8080));
+	auto client = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 8081));
 
-	REQUIRE_THROWS_AS(n->recv("", 0), exceptionpp::RuntimeError);
-	REQUIRE_THROWS_AS(n->recv("a", 1), exceptionpp::RuntimeError);
+	REQUIRE_THROWS_AS(client->recv("", 0), exceptionpp::RuntimeError);
+	REQUIRE_THROWS_AS(client->recv("a", 1), exceptionpp::RuntimeError);
+
+	auto t = std::thread(&msgpp::MessageNode::up, &*server);
+
+	client->send("test", "localhost", server->get_port());
+	REQUIRE(server->recv("", 0).compare("test") == 0);
+
+	sleep(10);
+	raise(SIGINT);
+	t.join();
 }
