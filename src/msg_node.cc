@@ -142,11 +142,19 @@ void msgpp::MessageNode::up() {
 
 				char host[NI_MAXHOST];
 				char port[NI_MAXSERV];
-				int rc = getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, port, NI_MAXSERV, NI_NUMERICHOST | NI_NUMERICSERV);
+				char ip[NI_MAXHOST];
+
+				((struct sockaddr *) &client_addr)->sa_family = info.ai_family;
+
+				int r = getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, port, NI_MAXSERV, NI_NUMERICSERV);
+				int s = getnameinfo((struct sockaddr *) &client_addr, client_size, ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
 				{
+					std::cout << "info: " << host << port << ip << std::endl;
+					std::cout << "r: " << r << ", s: " << s << std::endl;
+
 					std::lock_guard<std::mutex> lock(this->messages_l);
-					if (rc == 0) {
-						this->messages.push_back(msgpp::Message("", host, std::stoll(std::string(port)), msg_buf.str()));
+					if (r == 0 && s == 0) {
+						this->messages.push_back(msgpp::Message(ip, host, std::stoll(std::string(port)), msg_buf.str()));
 					} else {
 						this->messages.push_back(msgpp::Message("", "", 0, msg_buf.str()));
 					}
@@ -206,12 +214,26 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot connect to destination"));
 	}
 
-	int result = send(client_sock, msg_buf.str().c_str(), msg_buf.str().length(), 0);
-	if(result == -1) {
-		if(errno == EWOULDBLOCK) {}
+	int result = -1;
+	size_t n_bytes = 0;
+	for(size_t i = 0; i < this->get_timeout(); ++i) {
+		result = send(client_sock, msg_buf.str().c_str(), msg_buf.str().length(), 0);
+		if(result != -1) {
+			n_bytes += result;
+			if(n_bytes == msg_buf.str().length()) {
+				break;
+			}
+		} else {
+			if(errno == EWOULDBLOCK) {
+				sleep(1);
+			} else {
+				break;
+			}
+		}
+	}
+
+	if(result == -1 || n_bytes != msg_buf.str().length()) {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "could not send data"));
-	} else if((size_t) result != msg_buf.str().length()) {
-		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "invalid data return size"));
 	}
 
 	freeaddrinfo(list);

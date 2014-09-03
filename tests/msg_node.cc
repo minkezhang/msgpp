@@ -48,7 +48,8 @@ TEST_CASE("msgpp|msg_node-conn") {
 
 	// check that IPv6 works
 	REQUIRE_NOTHROW(client->push("test", "::1", server->get_port()));
-	sleep(1);
+	REQUIRE_NOTHROW(client->push("test", "localhost", server->get_port()));
+	// sleep(1);
 	REQUIRE(server->pull("", 0).compare("test") == 0);
 	raise(SIGINT);
 	t.join();
