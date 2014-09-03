@@ -199,13 +199,16 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	info.ai_family = AF_UNSPEC;
 	info.ai_socktype = SOCK_STREAM;
 
-	status = getaddrinfo(hostname.c_str(), port_buf.str().c_str(), &info, &list);
+	getaddrinfo(hostname.c_str(), port_buf.str().c_str(), &info, &list);
 	if(list == NULL) {
 		if(silent_fail) { return(0); }
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot find endpoint"));
 	}
 	client_sock = socket(list->ai_family, list->ai_socktype, list->ai_protocol);
 	if(client_sock == -1) {
+		freeaddrinfo(list);
+		shutdown(client_sock, SHUT_RDWR);
+		close(client_sock);
 		if(silent_fail) { return(0); }
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot open socket"));
 	}
@@ -224,6 +227,9 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	}
 
 	if(status == -1) {
+		freeaddrinfo(list);
+		shutdown(client_sock, SHUT_RDWR);
+		close(client_sock);
 		if(silent_fail) { return(0); }
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot connect to destination"));
 	}
@@ -249,6 +255,9 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	}
 
 	if(result == -1 || n_bytes != msg_buf.str().length()) {
+		freeaddrinfo(list);
+		shutdown(client_sock, SHUT_RDWR);
+		close(client_sock);
 		if(silent_fail) { return(0); }
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "could not send data"));
 	}
