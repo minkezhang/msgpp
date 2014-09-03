@@ -36,7 +36,7 @@ namespace msgpp {
 
 			// send to a persistent endpoint
 			size_t send(std::string message, std::string hostname, size_t port);
-			std::string recv(size_t len, std::string hostname, size_t port);
+			std::string recv(std::string hostname, size_t port);
 
 			// cf. http://bit.ly/1nqOnyd
 			static void term(int p);
@@ -48,7 +48,7 @@ namespace msgpp {
 
 			std::vector<Message> messages;
 
-			std::recursive_mutex messages_l;
+			std::mutex messages_l;
 
 			static std::vector<std::shared_ptr<MessageNode>> instances;
 			static std::mutex l;
@@ -56,3 +56,4 @@ namespace msgpp {
 }
 
 #endif
+

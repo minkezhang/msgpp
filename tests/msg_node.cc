@@ -4,6 +4,8 @@
 #include <unistd.h>
 
 #include "libs/catch/catch.hpp"
+#include "libs/exceptionpp/exception.h"
+
 #include "src/msg_node.h"
 
 TEST_CASE("msgpp|msg_node") {
@@ -37,4 +39,7 @@ TEST_CASE("msgpp|msg_node") {
 
 TEST_CASE("msgpp|msg_node-recv") {
 	auto n = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode("", 0));
+
+	REQUIRE_THROWS_AS(n->recv("", 0), exceptionpp::RuntimeError);
+	REQUIRE_THROWS_AS(n->recv("a", 1), exceptionpp::RuntimeError);
 }

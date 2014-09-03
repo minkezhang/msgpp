@@ -1,6 +1,8 @@
 #include <signal.h>
 #include <string>
 
+#include "libs/exceptionpp/exception.h"
+
 #include "src/msg_node.h"
 
 msgpp::Message::Message(std::string hostname, size_t port, std::string message) : hostname(hostname), port(port), message(message) {}
@@ -40,8 +42,8 @@ void msgpp::MessageNode::dn() {
 
 size_t msgpp::MessageNode::send(std::string message, std::string hostname, size_t port) { return(0); }
 
-std::string msgpp::MessageNode::recv(size_t len, std::string hostname, size_t port) {
-	std::lock_guard<std::recursive_mutex> lock(this->messages_l);
+std::string msgpp::MessageNode::recv(std::string hostname, size_t port) {
+	std::lock_guard<std::mutex> lock(this->messages_l);
 	if(!this->messages.empty()) {
 		size_t target = 0;
 		bool is_found = 0;
@@ -54,7 +56,8 @@ std::string msgpp::MessageNode::recv(size_t len, std::string hostname, size_t po
 				break;
 			}
 		}
-		if(!is_found) { return(""); // ...
+		if(!is_found) {
+			throw(exceptionpp::RuntimeError("msgpp::MessageNode::recv", "message does not exist"));
 		}
 
 		std::string message = this->messages.at(target).get_message();
@@ -62,7 +65,7 @@ std::string msgpp::MessageNode::recv(size_t len, std::string hostname, size_t po
 		return(message);
 	}
 	else {
-		return("");
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::recv", "message does not exist"));
 	}
 }
 
