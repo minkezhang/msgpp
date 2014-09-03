@@ -141,6 +141,9 @@ void msgpp::MessageNode::up() {
 					}
 				} else {
 					msg_buf << tmp;
+				}
+
+				if(size != 0) {
 					is_done = (msg_buf.str().length() >= size);
 				}
 			}
@@ -154,12 +157,12 @@ void msgpp::MessageNode::up() {
 			int r = getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, port, NI_MAXSERV, NI_NUMERICSERV);
 			int s = getnameinfo((struct sockaddr *) &client_addr, client_size, ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
 
-			if(is_done && (msg_buf.str().length() == size)) {
+			if(is_done && (msg_buf.str().length() >= size)) {
 				std::lock_guard<std::mutex> lock(this->messages_l);
 				if (r == 0 && s == 0) {
-					this->messages.push_back(msgpp::Message(ip, host, std::stoll(std::string(port)), msg_buf.str()));
+					this->messages.push_back(msgpp::Message(ip, host, std::stoll(std::string(port)), msg_buf.str().substr(0, size)));
 				} else {
-					this->messages.push_back(msgpp::Message("", "", 0, msg_buf.str()));
+					this->messages.push_back(msgpp::Message("", "", 0, msg_buf.str().substr(0, size)));
 				}
 			}
 			close(client_sock);
