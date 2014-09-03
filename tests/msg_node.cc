@@ -59,7 +59,7 @@ TEST_CASE("msgpp|msg_node-conn") {
 	REQUIRE(client->push("abcdef", "127.0.0.1", server->get_port()) == 6);
 	REQUIRE(client->push("long long string", "localhost", server->get_port()) == 16);
 
-	REQUIRE_NOTHROW(client->push("foo", "localhost", server->get_port()));
+	REQUIRE(client->push("foo", "localhost", server->get_port()) == 3);
 
 	raise(SIGINT);
 	t.join();

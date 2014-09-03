@@ -71,20 +71,36 @@ void msgpp::MessageNode::up() {
 	if(list == NULL) {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot find address"));
 	}
+
 	server_sock = socket(list->ai_family, list->ai_socktype, list->ai_protocol);
 	if(server_sock == -1) {
+		freeaddrinfo(list);
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot open socket"));
 	}
+
 	int yes = 1;
 	status = setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
 	status = bind(server_sock, list->ai_addr, list->ai_addrlen);
 	if(status == -1) {
+		freeaddrinfo(list);
+		shutdown(server_sock, SHUT_RDWR);
+		close(server_sock);
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot bind server-side socket"));
 	}
+
 	status = listen(server_sock, msgpp::MessageNode::max_conn);
 	if(status == -1) {
+		freeaddrinfo(list);
+		shutdown(server_sock, SHUT_RDWR);
+		close(server_sock);
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot listen on server-side socket"));
 	}
+
+	// set as non-blocking
+	//	cf. http://bit.ly/1tse7i3
+	fcntl(server_sock, F_SETFL, O_NONBLOCK);
+
+	this->threads.clear();
 
 	// use sockaddr_storage for protocol-agnostic IP storage
 	//	cf. http://bit.ly/1ukHOQ8
@@ -92,14 +108,9 @@ void msgpp::MessageNode::up() {
 	memset(&client_addr, sizeof(struct sockaddr_storage), sizeof(char));
 	socklen_t client_size = 0;
 
-	// set as non-blocking
-	//	cf. http://bit.ly/1tse7i3
-	fcntl(server_sock, F_SETFL, O_NONBLOCK);
-
-	int client_sock;
-	this->threads.clear();
 	while(*(this->flag)) {
-		client_sock = accept(server_sock, (sockaddr *) &client_addr, &client_size);
+		// dispatch any incoming clients
+		int client_sock = accept(server_sock, (sockaddr *) &client_addr, &client_size);
 		if(client_sock != -1) {
 			std::shared_ptr<std::thread> t (new std::thread(&msgpp::MessageNode::dispatch, this, client_sock, client_addr, client_size));
 			this->threads.push_back(t);
