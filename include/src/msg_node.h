@@ -38,8 +38,8 @@ namespace msgpp {
 			void dn();
 
 			// send to a persistent endpoint
-			size_t push(std::string message, std::string hostname, size_t port);
-			std::string pull(std::string hostname = "");
+			size_t push(std::string message, std::string hostname, size_t port, bool silent_fail = false);
+			std::string pull(std::string hostname = "", bool silent_fail = false);
 
 			// get number of messages currently in queue
 			size_t query();
@@ -56,11 +56,13 @@ namespace msgpp {
 			size_t port;
 			size_t timeout;
 
+			std::vector<std::shared_ptr<std::thread>> threads;
 			std::shared_ptr<std::atomic<bool>> flag;
 
 			std::vector<Message> messages;
-
 			std::mutex messages_l;
+
+			void dispatch(int client_sock, struct sockaddr_storage client_addr, socklen_t client_size);
 
 			static std::vector<std::shared_ptr<MessageNode>> instances;
 			static std::mutex l;

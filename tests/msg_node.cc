@@ -11,6 +11,8 @@
 
 #include "src/msg_node.h"
 
+#define NETWORK_TOLERANCE 500
+
 TEST_CASE("msgpp|msg_node") {
 	auto n = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8080));
 	auto m = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8081));
@@ -48,6 +50,7 @@ TEST_CASE("msgpp|msg_node-conn") {
 	REQUIRE_THROWS_AS(client->pull("a"), exceptionpp::RuntimeError);
 
 	REQUIRE_THROWS_AS(client->push("test", "::1", server->get_port()), exceptionpp::RuntimeError);
+	REQUIRE(client->push("test", "::1", server->get_port(), true) == 0);
 
 	auto t = std::thread(&msgpp::MessageNode::up, &*server);
 
@@ -66,34 +69,25 @@ TEST_CASE("msgpp|msg_node-conn") {
 	REQUIRE(server->pull().compare("long long string") == 0);
 
 	REQUIRE_THROWS_AS(server->pull("fake"), exceptionpp::RuntimeError);
+	REQUIRE(server->pull("fake", true).compare("") == 0);
+
 	REQUIRE(server->pull("localhost").compare("foo") == 0);
 
 	t = std::thread(&msgpp::MessageNode::up, &*server);
 
-	std::cout << "BEGIN THREADING" << std::endl;
-
-	size_t n_attempts = 10;
+	size_t n_attempts = 1000;
 
 	std::vector<std::thread> threads;
 	for(size_t i = 0; i < n_attempts; ++i) {
-		std::cout << "threading: " << (i + 1) << std::endl;
-		std::stringstream buf;
-		buf << "foo_" << (i + 1);
-		threads.push_back(std::thread(&msgpp::MessageNode::push, &*client, buf.str(), "localhost", server->get_port()));
+		threads.push_back(std::thread(&msgpp::MessageNode::push, &*client, "foo", "localhost", server->get_port(), true));
 	}
 
 	for(size_t i = 0; i < n_attempts; ++i) {
-		std::cout << "joining: " << (i + 1) << std::endl;
 		threads.at(i).join();
 	}
 
 	raise(SIGINT);
 	t.join();
 
-	REQUIRE(server->query() == n_attempts);
-
-	for(size_t i = 0; i < n_attempts; ++i) {
-		std::cout << i << std::endl;
-		REQUIRE(server->pull().compare("foo") == 0);
-	}
+	REQUIRE(server->query() > NETWORK_TOLERANCE);
 }

@@ -13,8 +13,6 @@
 #include <thread>
 #include <unistd.h>
 
-#include <iostream>
-
 #include "libs/exceptionpp/exception.h"
 
 #include "src/msg_node.h"
@@ -99,73 +97,17 @@ void msgpp::MessageNode::up() {
 	fcntl(server_sock, F_SETFL, O_NONBLOCK);
 
 	int client_sock;
+	this->threads.clear();
 	while(*(this->flag)) {
 		client_sock = accept(server_sock, (sockaddr *) &client_addr, &client_size);
-
-		char host[NI_MAXHOST] = "";
-		char ip[NI_MAXHOST] = "";
-
-		getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, NULL, 0, 0);
-		getnameinfo((struct sockaddr *) &client_addr, client_size, ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
-
-		if(client_sock == -1) {
-			std::this_thread::sleep_for(msgpp::MessageNode::increment);
-		} else {
-			std::cout << "new connection" << std::endl;
-			fcntl(client_sock, F_SETFL, O_NONBLOCK);
-			std::stringstream len_buf;
-			std::stringstream msg_buf;
-			bool is_done = 0;
-			size_t size = 0;
-			while(!is_done) {
-				char tmp_buf[msgpp::MessageNode::size];
-				memset(&tmp_buf, 0, msgpp::MessageNode::size);
-				int n_bytes = 0;
-				time_t start = time(NULL);
-				while(((size_t) time(NULL) - start) < this->timeout) {
-					n_bytes = recv(client_sock, &tmp_buf, msgpp::MessageNode::size, 0);
-					if(n_bytes == -1) {
-						if(errno != EAGAIN) {
-							break;
-						}
-						std::this_thread::sleep_for(msgpp::MessageNode::increment);
-					} else {
-						break;
-					}
-				}
-				if(n_bytes == 0 || n_bytes == -1) {
-					// client closed unexpectedly
-					// as the message queue is atomically set (i.e., no half-assed data), we will roll back changes and not touch the queue
-					break;
-				}
-				std::string tmp = std::string(tmp_buf, n_bytes);
-				if(size == 0) {
-					size_t pos = tmp.find(':');
-					if(pos == std::string::npos) {
-						pos = tmp.size();
-					}
-					len_buf << tmp.substr(0, pos);
-					if(pos != tmp.size()) {
-						size = std::stoll(len_buf.str());
-						msg_buf << tmp.substr(pos + 1);
-					}
-				} else {
-					msg_buf << tmp;
-				}
-
-				if(size != 0) {
-					is_done = (msg_buf.str().length() >= size);
-				}
-			}
-
-			if(is_done && (msg_buf.str().length() >= size)) {
-				std::lock_guard<std::mutex> lock(this->messages_l);
-				this->messages.push_back(msgpp::Message(ip, host, msg_buf.str().substr(0, size)));
-				std::cout << "pushed back" << std::endl;
-			}
-			shutdown(client_sock, SHUT_RDWR);
-			close(client_sock);
+		if(client_sock != -1) {
+			std::shared_ptr<std::thread> t (new std::thread(&msgpp::MessageNode::dispatch, this, client_sock, client_addr, client_size));
+			this->threads.push_back(t);
 		}
+	}
+
+	for(size_t i = 0; i < this->threads.size(); ++i) {
+		this->threads.at(i)->join();
 	}
 
 	freeaddrinfo(list);
@@ -173,6 +115,66 @@ void msgpp::MessageNode::up() {
 	close(server_sock);
 
 	return;
+}
+
+void msgpp::MessageNode::dispatch(int client_sock, struct sockaddr_storage client_addr, socklen_t client_size) {
+	char host[NI_MAXHOST] = "";
+	char ip[NI_MAXHOST] = "";
+
+	getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, NULL, 0, 0);
+	getnameinfo((struct sockaddr *) &client_addr, client_size, ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+
+	fcntl(client_sock, F_SETFL, O_NONBLOCK);
+	std::stringstream len_buf;
+	std::stringstream msg_buf;
+	bool is_done = 0;
+	size_t size = 0;
+	while(!is_done) {
+		char tmp_buf[msgpp::MessageNode::size];
+		memset(&tmp_buf, 0, msgpp::MessageNode::size);
+		int n_bytes = 0;
+		time_t start = time(NULL);
+		while(((size_t) time(NULL) - start) < this->timeout) {
+			n_bytes = recv(client_sock, &tmp_buf, msgpp::MessageNode::size, 0);
+			if(n_bytes == -1) {
+				if(errno != EAGAIN) {
+					break;
+				}
+				std::this_thread::sleep_for(msgpp::MessageNode::increment);
+			} else {
+				break;
+			}
+		}
+		if(n_bytes == 0 || n_bytes == -1) {
+			// client closed unexpectedly
+			// as the message queue is atomically set (i.e., no half-assed data), we will roll back changes and not touch the queue
+			break;
+		}
+		std::string tmp = std::string(tmp_buf, n_bytes);
+		if(size == 0) {
+			size_t pos = tmp.find(':');
+			if(pos == std::string::npos) {
+				pos = tmp.size();
+			}
+			len_buf << tmp.substr(0, pos);
+			if(pos != tmp.size()) {
+				size = std::stoll(len_buf.str());
+				msg_buf << tmp.substr(pos + 1);
+			}
+		} else {
+			msg_buf << tmp;
+		}
+		if(size != 0) {
+			is_done = (msg_buf.str().length() >= size);
+		}
+	}
+
+	if(is_done && (msg_buf.str().length() >= size)) {
+		std::lock_guard<std::mutex> lock(this->messages_l);
+		this->messages.push_back(msgpp::Message(ip, host, msg_buf.str().substr(0, size)));
+	}
+	shutdown(client_sock, SHUT_RDWR);
+	close(client_sock);
 }
 
 void msgpp::MessageNode::dn() {
@@ -184,7 +186,7 @@ size_t msgpp::MessageNode::query() {
 	return(this->messages.size());
 }
 
-size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_t port) {
+size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_t port, bool silent_fail) {
 	std::stringstream port_buf, msg_buf;
 	port_buf << port;
 	msg_buf << message.length() << ":" << message;
@@ -198,9 +200,13 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	info.ai_socktype = SOCK_STREAM;
 
 	status = getaddrinfo(hostname.c_str(), port_buf.str().c_str(), &info, &list);
+	if(list == NULL) {
+		if(silent_fail) { return(0); }
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot find endpoint"));
+	}
 	client_sock = socket(list->ai_family, list->ai_socktype, list->ai_protocol);
 	if(client_sock == -1) {
-		std::cout << "msgpp::MessageNode::push -- cannot open socket" << std::endl;
+		if(silent_fail) { return(0); }
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot open socket"));
 	}
 
@@ -218,7 +224,7 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	}
 
 	if(status == -1) {
-		std::cout << "msgpp::MessageNode::push -- cannot connect to destination" << std::endl;
+		if(silent_fail) { return(0); }
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot connect to destination"));
 	}
 
@@ -243,7 +249,7 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	}
 
 	if(result == -1 || n_bytes != msg_buf.str().length()) {
-		std::cout << "msgpp::MessageNode::push -- could not send data" << std::endl;
+		if(silent_fail) { return(0); }
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "could not send data"));
 	}
 
@@ -251,12 +257,10 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	shutdown(client_sock, SHUT_RDWR);
 	close(client_sock);
 
-	std::cout << "sent: " << msg_buf.str() << std::endl;
-
 	return(result - (msg_buf.str().length() - message.length()));
 }
 
-std::string msgpp::MessageNode::pull(std::string hostname) {
+std::string msgpp::MessageNode::pull(std::string hostname, bool silent_fail) {
 	std::lock_guard<std::mutex> lock(this->messages_l);
 
 	size_t target = 0;
@@ -282,6 +286,7 @@ std::string msgpp::MessageNode::pull(std::string hostname) {
 	}
 
 	if(!is_found) {
+		if(silent_fail) { return(""); }
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::pull", "message does not exist"));
 	}
 
