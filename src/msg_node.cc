@@ -17,11 +17,10 @@
 
 #include "src/msg_node.h"
 
-msgpp::Message::Message(std::string ip, std::string hostname, size_t port, std::string message) : ip(ip), hostname(hostname), port(port), message(message) {}
+msgpp::Message::Message(std::string ip, std::string hostname, std::string message) : ip(ip), hostname(hostname), message(message) {}
 
 std::string msgpp::Message::get_ip() { return(this->ip); }
 std::string msgpp::Message::get_hostname() { return(this->hostname); }
-size_t msgpp::Message::get_port() { return(this->port); }
 std::string msgpp::Message::get_message() { return(this->message); }
 
 std::vector<std::shared_ptr<msgpp::MessageNode>> msgpp::MessageNode::instances;
@@ -100,6 +99,13 @@ void msgpp::MessageNode::up() {
 	int client_sock;
 	while(*(this->flag)) {
 		client_sock = accept(server_sock, (sockaddr *) &client_addr, &client_size);
+
+		char host[NI_MAXHOST] = "";
+		char ip[NI_MAXHOST] = "";
+
+		int r = getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, NULL, 0, 0);
+		int s = getnameinfo((struct sockaddr *) &client_addr, client_size, ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+
 		if(client_sock == -1) {
 			std::this_thread::sleep_for(msgpp::MessageNode::increment);
 		} else {
@@ -149,22 +155,9 @@ void msgpp::MessageNode::up() {
 				}
 			}
 
-			char host[NI_MAXHOST];
-			char port[NI_MAXSERV];
-			char ip[NI_MAXHOST];
-
-			((struct sockaddr *) &client_addr)->sa_family = info.ai_family;
-
-			int r = getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, port, NI_MAXSERV, NI_NUMERICSERV);
-			int s = getnameinfo((struct sockaddr *) &client_addr, client_size, ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
-
 			if(is_done && (msg_buf.str().length() >= size)) {
 				std::lock_guard<std::mutex> lock(this->messages_l);
-				if (r == 0 && s == 0) {
-					this->messages.push_back(msgpp::Message(ip, host, std::stoll(std::string(port)), msg_buf.str().substr(0, size)));
-				} else {
-					this->messages.push_back(msgpp::Message("", "", 0, msg_buf.str().substr(0, size)));
-				}
+				this->messages.push_back(msgpp::Message(ip, host, msg_buf.str().substr(0, size)));
 			}
 			shutdown(client_sock, SHUT_RDWR);
 			close(client_sock);
@@ -250,7 +243,7 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	return(result - (msg_buf.str().length() - message.length()));
 }
 
-std::string msgpp::MessageNode::pull(std::string hostname, size_t port) {
+std::string msgpp::MessageNode::pull(std::string hostname) {
 	std::lock_guard<std::mutex> lock(this->messages_l);
 
 	size_t target = 0;
@@ -261,9 +254,9 @@ std::string msgpp::MessageNode::pull(std::string hostname, size_t port) {
 		if(!this->messages.empty()) {
 			for(size_t i = 0; i < this->messages.size(); ++i) {
 				msgpp::Message instance = this->messages.at(i);
+				std::cout << "ip: " << instance.get_ip() << ", hostname: " << instance.get_hostname() << std::endl;
 				bool match_h = (instance.get_hostname().compare("") == 0) || (instance.get_ip().compare("") == 0) || (hostname.compare("") == 0) || (hostname.compare(instance.get_hostname()) == 0) || (hostname.compare(instance.get_ip()) == 0);
-				bool match_p = (instance.get_port() == 0) || (port == 0) || (port == instance.get_port());
-				if(match_h && match_p) {
+				if(match_h) {
 					target = i;
 					is_found = 1;
 					break;

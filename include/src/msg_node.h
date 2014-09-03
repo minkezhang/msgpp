@@ -11,17 +11,15 @@
 namespace msgpp {
 	class Message {
 		public:
-			Message(std::string ip, std::string hostname, size_t port, std::string message);
+			Message(std::string ip, std::string hostname, std::string message);
 
 			std::string get_ip();
 			std::string get_hostname();
-			size_t get_port();
 			std::string get_message();
 
 		private:
 			std::string ip;
 			std::string hostname;
-			size_t port;
 
 			std::string message;
 	};
@@ -41,7 +39,7 @@ namespace msgpp {
 
 			// send to a persistent endpoint
 			size_t push(std::string message, std::string hostname, size_t port);
-			std::string pull(std::string hostname, size_t port);
+			std::string pull(std::string hostname = "");
 
 			// cf. http://bit.ly/1nqOnyd
 			static void term(int p);
@@ -64,7 +62,7 @@ namespace msgpp {
 			static std::mutex l;
 
 			static std::chrono::milliseconds increment;
-			static const size_t size = 2;
+			static const size_t size = 1024;
 	};
 }
 

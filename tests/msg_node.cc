@@ -3,8 +3,6 @@
 #include <thread>
 #include <unistd.h>
 
-#include <iostream>
-
 #include "libs/catch/catch.hpp"
 #include "libs/exceptionpp/exception.h"
 
@@ -43,8 +41,10 @@ TEST_CASE("msgpp|msg_node-conn") {
 	auto server = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8080, msgpp::MessageNode::ipv6));
 	auto client = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8081));
 
-	REQUIRE_THROWS_AS(client->pull("", 0), exceptionpp::RuntimeError);
-	REQUIRE_THROWS_AS(client->pull("a", 1), exceptionpp::RuntimeError);
+	REQUIRE_THROWS_AS(client->pull(""), exceptionpp::RuntimeError);
+	REQUIRE_THROWS_AS(client->pull("a"), exceptionpp::RuntimeError);
+
+	REQUIRE_THROWS_AS(client->push("test", "::1", server->get_port()), exceptionpp::RuntimeError);
 
 	auto t = std::thread(&msgpp::MessageNode::up, &*server);
 
@@ -53,11 +53,16 @@ TEST_CASE("msgpp|msg_node-conn") {
 	REQUIRE(client->push("abcdef", "127.0.0.1", server->get_port()) == 6);
 	REQUIRE(client->push("long long string", "localhost", server->get_port()) == 16);
 
+	REQUIRE_NOTHROW(client->push("foo", "localhost", server->get_port()));
+
 	raise(SIGINT);
 	t.join();
 
-	REQUIRE(server->pull("", 0).compare("test") == 0);
-	REQUIRE(server->pull("", 0).compare("abcdef") == 0);
-	REQUIRE(server->pull("", 0).compare("long long string") == 0);
+	REQUIRE(server->pull().compare("test") == 0);
+	REQUIRE(server->pull().compare("abcdef") == 0);
+	REQUIRE(server->pull().compare("long long string") == 0);
+
+	REQUIRE_THROWS_AS(server->pull("fake"), exceptionpp::RuntimeError);
+	REQUIRE(server->pull("localhost").compare("foo") == 0);
 
 }
