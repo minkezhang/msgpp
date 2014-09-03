@@ -16,8 +16,9 @@
 
 #include "src/msg_node.h"
 
-msgpp::Message::Message(std::string hostname, size_t port, std::string message) : hostname(hostname), port(port), message(message) {}
+msgpp::Message::Message(std::string ip, std::string hostname, size_t port, std::string message) : ip(ip), hostname(hostname), port(port), message(message) {}
 
+std::string msgpp::Message::get_ip() { return(this->ip); }
 std::string msgpp::Message::get_hostname() { return(this->hostname); }
 size_t msgpp::Message::get_port() { return(this->port); }
 std::string msgpp::Message::get_message() { return(this->message); }
@@ -25,11 +26,11 @@ std::string msgpp::Message::get_message() { return(this->message); }
 std::vector<std::shared_ptr<msgpp::MessageNode>> msgpp::MessageNode::instances;
 std::mutex msgpp::MessageNode::l;
 
-msgpp::MessageNode::MessageNode(std::string hostname, size_t port, size_t timeout) : hostname(hostname), port(port), timeout(timeout) {
+msgpp::MessageNode::MessageNode(size_t port, uint8_t protocol, size_t timeout) : protocol(protocol), port(port), timeout(timeout) {
 	this->flag = std::shared_ptr<std::atomic<bool>> (new std::atomic<bool> (0));
 }
 
-std::string msgpp::MessageNode::get_hostname() { return(this->hostname); }
+uint8_t msgpp::MessageNode::get_protocol() { return(this->protocol); }
 size_t msgpp::MessageNode::get_port() { return(this->port); }
 size_t msgpp::MessageNode::get_timeout() { return(this->timeout); }
 void msgpp::MessageNode::set_timeout(size_t timeout) { this->timeout = timeout; }
@@ -55,11 +56,21 @@ void msgpp::MessageNode::up() {
 	struct addrinfo *list;
 	memset(&info, 0, sizeof(info));
 
-	info.ai_family = AF_UNSPEC;
+	if(this->protocol & msgpp::MessageNode::ipv6) {
+		info.ai_family = AF_INET6;
+	} else if(this->protocol & msgpp::MessageNode::ipv4) {
+		info.ai_family = AF_INET;
+	} else {
+		info.ai_family = AF_UNSPEC;
+	}
 	info.ai_socktype = SOCK_STREAM;
 	info.ai_flags = AI_PASSIVE;
 
 	status = getaddrinfo(NULL, port.str().c_str(), &info, &list);
+	if(list == NULL) {
+		std::cout << "PROBLEM: errno" << std::endl;
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot find address"));
+	}
 	server_sock = socket(list->ai_family, list->ai_socktype, list->ai_protocol);
 	if(server_sock == -1) {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot open socket"));
@@ -75,7 +86,7 @@ void msgpp::MessageNode::up() {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot listen on server-side socket"));
 	}
 
-	struct sockaddr_in client_addr;
+	struct sockaddr_storage client_addr;
 	socklen_t client_size;
 
 	// set as non-blocking
@@ -84,7 +95,7 @@ void msgpp::MessageNode::up() {
 
 	int client_sock;
 	while(*(this->flag)) {
-		client_sock = accept(server_sock, (struct sockaddr *) &client_addr, &client_size);
+		client_sock = accept(server_sock, (sockaddr *) &client_addr, &client_size);
 		if(client_sock == -1) {
 			sleep(1);
 		} else {
@@ -161,7 +172,7 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	status = getaddrinfo(hostname.c_str(), port_buf.str().c_str(), &info, &list);
 	client_sock = socket(list->ai_family, list->ai_socktype, list->ai_protocol);
 	if(client_sock == -1) {
-		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "cannot open socket"));
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot open socket"));
 	}
 
 	int yes = 1;
@@ -179,7 +190,7 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 	}
 
 	if(status == -1) {
-		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "cannot connect to destination"));
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot connect to destination"));
 	}
 
 	int result = send(client_sock, msg_buf.str().c_str(), msg_buf.str().length(), 0);
@@ -205,7 +216,7 @@ std::string msgpp::MessageNode::pull(std::string hostname, size_t port) {
 	for(size_t i = 0; i < this->timeout; ++i) {
 		if(!this->messages.empty()) {
 			for(size_t i = 0; i < this->messages.size(); ++i) {
-				bool match_h = (hostname.compare("") == 0) || (hostname.compare(this->messages.at(i).get_hostname()) == 0);
+				bool match_h = (hostname.compare("") == 0) || (hostname.compare(this->messages.at(i).get_hostname()) == 0) || (hostname.compare(this->messages.at(i).get_ip()) == 0);
 				bool match_p = (port == 0) || (port == this->messages.at(i).get_port());
 				if(match_h && match_p) {
 					target = i;

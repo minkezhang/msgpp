@@ -10,13 +10,15 @@
 namespace msgpp {
 	class Message {
 		public:
-			Message(std::string hostname, size_t port, std::string message);
+			Message(std::string ip, std::string hostname, size_t port, std::string message);
 
+			std::string get_ip();
 			std::string get_hostname();
 			size_t get_port();
 			std::string get_message();
 
 		private:
+			std::string ip;
 			std::string hostname;
 			size_t port;
 
@@ -25,9 +27,9 @@ namespace msgpp {
 
 	class MessageNode : public std::enable_shared_from_this<MessageNode> {
 		public:
-			MessageNode(std::string hostname, size_t port, size_t timeout = 2);
+			MessageNode(size_t port, uint8_t protocol = ipv4, size_t timeout = 2);
 
-			std::string get_hostname();
+			uint8_t get_protocol();
 			size_t get_port();
 			size_t get_timeout();
 			void set_timeout(size_t timeout);
@@ -43,8 +45,11 @@ namespace msgpp {
 			// cf. http://bit.ly/1nqOnyd
 			static void term(int p);
 
+			static const uint8_t ipv4 = 0;
+			static const uint8_t ipv6 = 1;
+
 		private:
-			std::string hostname;
+			uint8_t protocol;
 			size_t port;
 			size_t timeout;
 
