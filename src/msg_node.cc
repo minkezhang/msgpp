@@ -1,4 +1,5 @@
 #include <cstring>
+#include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -24,19 +25,21 @@ std::string msgpp::Message::get_message() { return(this->message); }
 std::vector<std::shared_ptr<msgpp::MessageNode>> msgpp::MessageNode::instances;
 std::mutex msgpp::MessageNode::l;
 
-msgpp::MessageNode::MessageNode(std::string hostname, size_t port) : hostname(hostname), port(port) {
+msgpp::MessageNode::MessageNode(std::string hostname, size_t port, size_t timeout) : hostname(hostname), port(port), timeout(timeout) {
 	this->flag = std::shared_ptr<std::atomic<bool>> (new std::atomic<bool> (0));
 }
 
 std::string msgpp::MessageNode::get_hostname() { return(this->hostname); }
 size_t msgpp::MessageNode::get_port() { return(this->port); }
+size_t msgpp::MessageNode::get_timeout() { return(this->timeout); }
+void msgpp::MessageNode::set_timeout(size_t timeout) { this->timeout = timeout; }
 
 void msgpp::MessageNode::up() {
-	if(*flag == 1) {
-		return;
-	}
 	{
 		std::lock_guard<std::mutex> lock(msgpp::MessageNode::l);
+		if(*flag == 1) {
+			return;
+		}
 		if(msgpp::MessageNode::instances.size() == 0) {
 			signal(SIGINT, msgpp::MessageNode::term);
 		}
@@ -52,7 +55,10 @@ void msgpp::MessageNode::up() {
 	struct addrinfo *list;
 	memset(&info, 0, sizeof(info));
 
+	info.ai_family = AF_UNSPEC;
+	info.ai_socktype = SOCK_STREAM;
 	info.ai_flags = AI_PASSIVE;
+
 	status = getaddrinfo(NULL, port.str().c_str(), &info, &list);
 	server_sock = socket(list->ai_family, list->ai_socktype, list->ai_protocol);
 	if(server_sock == -1) {
@@ -78,49 +84,149 @@ void msgpp::MessageNode::up() {
 
 	int client_sock;
 	while(*(this->flag)) {
-		do {
-			client_sock = accept(server_sock, (struct sockaddr *) &client_addr, &client_size);
+		client_sock = accept(server_sock, (struct sockaddr *) &client_addr, &client_size);
+		if(client_sock == -1) {
 			sleep(1);
-		} while(client_sock == -1);
-		std::cout << "accepted client: " << client_sock << std::endl;
-		close(client_sock);
+		} else {
+			fcntl(client_sock, F_SETFL, O_NONBLOCK);
+			std::lock_guard<std::mutex> lock(this->messages_l);
+			std::stringstream len_buf;
+			std::stringstream msg_buf;
+			bool is_done = 0;
+			size_t size = 0;
+			while(!is_done) {
+				char tmp_buf[1];
+				int n_bytes = 0;
+				for(size_t i = 0; i < this->get_timeout(); ++i) {
+					n_bytes = recv(client_sock, &tmp_buf, 1, 0);
+					if(n_bytes == -1) {
+						sleep(1);
+					} else {
+						break;
+					}
+				}
+				std::string tmp = std::string(tmp_buf);
+				if(n_bytes == 0 || n_bytes == -1) {
+					// client closed unexpectedly
+					// as the message queue is atomically set (i.e., no half-assed data), we will roll back changes and not touch the queue
+					break;
+				}
+				if(size == 0) {
+					size_t pos = tmp.find(':');
+					if(pos == std::string::npos) {
+						pos = tmp.size();
+					}
+					len_buf << tmp.substr(0, pos);
+					if(pos != tmp.size()) {
+						size = std::stoll(len_buf.str());
+						msg_buf << tmp.substr(pos + 1);
+					}
+				} else {
+					msg_buf << tmp_buf;
+					is_done = (msg_buf.str().size() >= size);
+				}
+			}
+			if(is_done && (msg_buf.str().size() == size)) {
+				std::cout << "buffer: " << msg_buf.str() << std::endl;
+				// queue stuff
+			}
+			close(client_sock);
+		}
 	}
 
 	freeaddrinfo(list);
 	close(server_sock);
+
+	return;
 }
 
 void msgpp::MessageNode::dn() {
 	*(this->flag) = 0;
 }
 
-size_t msgpp::MessageNode::send(std::string message, std::string hostname, size_t port) { return(0); }
+size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_t port) {
+	std::cout << "in push" << std::endl;
+	std::stringstream port_buf, msg_buf;
+	port_buf << port;
+	msg_buf << message.length() << ":" << message;
 
-std::string msgpp::MessageNode::recv(std::string hostname, size_t port) {
+	int client_sock, status;
+	struct addrinfo info;
+	struct addrinfo *list;
+	memset(&info, 0, sizeof(info));
+
+	info.ai_family = AF_UNSPEC;
+	info.ai_socktype = SOCK_STREAM;
+
+	status = getaddrinfo(hostname.c_str(), port_buf.str().c_str(), &info, &list);
+	client_sock = socket(list->ai_family, list->ai_socktype, list->ai_protocol);
+	if(client_sock == -1) {
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "cannot open socket"));
+	}
+
+	int yes = 1;
+	status = setsockopt(client_sock, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int));
+	fcntl(client_sock, F_SETFL, O_NONBLOCK);
+
+	for(size_t i = 0; i < this->get_timeout(); ++i) {
+		status = connect(client_sock, list->ai_addr, list->ai_addrlen);
+		if(status != -1) {
+			std::cout << "connected!" << std::endl;
+			break;
+		}
+		std::cout << "cannot connect" << std::endl;
+		sleep(1);
+	}
+
+	if(status == -1) {
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "cannot connect to destination"));
+	}
+
+	int result = send(client_sock, msg_buf.str().c_str(), msg_buf.str().length(), 0);
+	if(result == -1) {
+		if(errno == EWOULDBLOCK) {}
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "could not send data"));
+	} else if((size_t) result != msg_buf.str().length()) {
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::send", "invalid data return size"));
+	}
+
+	freeaddrinfo(list);
+	close(client_sock);
+
+	std::cout << "sent!" << std::endl;
+	return(result);
+}
+
+std::string msgpp::MessageNode::pull(std::string hostname, size_t port) {
 	std::lock_guard<std::mutex> lock(this->messages_l);
-	if(!this->messages.empty()) {
-		size_t target = 0;
-		bool is_found = 0;
-		for(size_t i = 0; i < this->messages.size(); ++i) {
-			bool match_h = (hostname.compare("") == 0) || (hostname.compare(this->messages.at(i).get_hostname()) == 0);
-			bool match_p = (port == 0) || (port == this->messages.at(i).get_port());
-			if(match_h && match_p) {
-				target = i;
-				is_found = 1;
-				break;
+
+	size_t target = 0;
+	bool is_found = 0;
+	for(size_t i = 0; i < this->timeout; ++i) {
+		if(!this->messages.empty()) {
+			for(size_t i = 0; i < this->messages.size(); ++i) {
+				bool match_h = (hostname.compare("") == 0) || (hostname.compare(this->messages.at(i).get_hostname()) == 0);
+				bool match_p = (port == 0) || (port == this->messages.at(i).get_port());
+				if(match_h && match_p) {
+					target = i;
+					is_found = 1;
+					break;
+				}
 			}
 		}
-		if(!is_found) {
-			throw(exceptionpp::RuntimeError("msgpp::MessageNode::recv", "message does not exist"));
+		if(is_found) {
+			break;
 		}
-
-		std::string message = this->messages.at(target).get_message();
-		this->messages.erase(this->messages.begin() + target);
-		return(message);
+		sleep(1);
 	}
-	else {
+
+	if(!is_found) {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::recv", "message does not exist"));
 	}
+
+	std::string message = this->messages.at(target).get_message();
+	this->messages.erase(this->messages.begin() + target);
+	return(message);
 }
 
 void msgpp::MessageNode::term(int p) {

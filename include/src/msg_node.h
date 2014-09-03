@@ -25,18 +25,20 @@ namespace msgpp {
 
 	class MessageNode : public std::enable_shared_from_this<MessageNode> {
 		public:
-			MessageNode(std::string hostname, size_t port);
+			MessageNode(std::string hostname, size_t port, size_t timeout = 2);
 
 			std::string get_hostname();
 			size_t get_port();
+			size_t get_timeout();
+			void set_timeout(size_t timeout);
 
 			// start a persistent incoming socket
 			void up();
 			void dn();
 
 			// send to a persistent endpoint
-			size_t send(std::string message, std::string hostname, size_t port);
-			std::string recv(std::string hostname, size_t port);
+			size_t push(std::string message, std::string hostname, size_t port);
+			std::string pull(std::string hostname, size_t port);
 
 			// cf. http://bit.ly/1nqOnyd
 			static void term(int p);
@@ -44,6 +46,8 @@ namespace msgpp {
 		private:
 			std::string hostname;
 			size_t port;
+			size_t timeout;
+
 			std::shared_ptr<std::atomic<bool>> flag;
 
 			std::vector<Message> messages;
