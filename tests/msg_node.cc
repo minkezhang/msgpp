@@ -3,6 +3,8 @@
 #include <thread>
 #include <unistd.h>
 
+#include <iostream>
+
 #include "libs/catch/catch.hpp"
 #include "libs/exceptionpp/exception.h"
 
@@ -47,10 +49,16 @@ TEST_CASE("msgpp|msg_node-conn") {
 	auto t = std::thread(&msgpp::MessageNode::up, &*server);
 
 	// check that IPv6 works
-	REQUIRE_NOTHROW(client->push("test", "::1", server->get_port()));
-	REQUIRE_NOTHROW(client->push("test", "localhost", server->get_port()));
-	// sleep(1);
-	REQUIRE(server->pull("", 0).compare("test") == 0);
+	std::cout << "test" << std::endl;
+	REQUIRE(client->push("test", "::1", server->get_port()) == 4);
+
+	std::cout << "abcdef" << std::endl;
+	REQUIRE(client->push("abcdef", "127.0.0.1", server->get_port()) == 6);
+
 	raise(SIGINT);
 	t.join();
+
+	REQUIRE(server->pull("", 0).compare("test") == 0);
+	REQUIRE(server->pull("", 0).compare("abcdef") == 0);
+
 }

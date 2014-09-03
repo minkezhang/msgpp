@@ -2,6 +2,7 @@
 #define _MSGPP_MSG_NODE_H
 
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -61,6 +62,9 @@ namespace msgpp {
 
 			static std::vector<std::shared_ptr<MessageNode>> instances;
 			static std::mutex l;
+
+			static std::chrono::milliseconds increment;
+			static const size_t size = 256;
 	};
 }
 
