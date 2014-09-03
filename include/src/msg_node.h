@@ -8,6 +8,21 @@
 #include <vector>
 
 namespace msgpp {
+	class Message {
+		public:
+			Message(std::string hostname, size_t port, std::string message);
+
+			std::string get_hostname();
+			size_t get_port();
+			std::string get_message();
+
+		private:
+			std::string hostname;
+			size_t port;
+
+			std::string message;
+	};
+
 	class MessageNode : public std::enable_shared_from_this<MessageNode> {
 		public:
 			MessageNode(std::string hostname, size_t port);
@@ -30,6 +45,10 @@ namespace msgpp {
 			std::string hostname;
 			size_t port;
 			std::shared_ptr<std::atomic<bool>> flag;
+
+			std::vector<Message> messages;
+
+			std::recursive_mutex messages_l;
 
 			static std::vector<std::shared_ptr<MessageNode>> instances;
 			static std::mutex l;
