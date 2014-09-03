@@ -90,7 +90,8 @@ void msgpp::MessageNode::up() {
 	// use sockaddr_storage for protocol-agnostic IP storage
 	//	cf. http://bit.ly/1ukHOQ8
 	struct sockaddr_storage client_addr;
-	socklen_t client_size;
+	memset(&client_addr, sizeof(struct sockaddr_storage), sizeof(char));
+	socklen_t client_size = 0;
 
 	// set as non-blocking
 	//	cf. http://bit.ly/1tse7i3
@@ -123,12 +124,12 @@ void msgpp::MessageNode::up() {
 						break;
 					}
 				}
-				std::string tmp = std::string(tmp_buf, msgpp::MessageNode::size);
 				if(n_bytes == 0 || n_bytes == -1) {
 					// client closed unexpectedly
 					// as the message queue is atomically set (i.e., no half-assed data), we will roll back changes and not touch the queue
 					break;
 				}
+				std::string tmp = std::string(tmp_buf, n_bytes);
 				if(size == 0) {
 					size_t pos = tmp.find(':');
 					if(pos == std::string::npos) {

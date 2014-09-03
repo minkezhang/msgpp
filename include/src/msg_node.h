@@ -64,7 +64,7 @@ namespace msgpp {
 			static std::mutex l;
 
 			static std::chrono::milliseconds increment;
-			static const size_t size = 16;
+			static const size_t size = 2;
 	};
 }
 
