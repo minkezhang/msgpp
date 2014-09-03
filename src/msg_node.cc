@@ -103,8 +103,8 @@ void msgpp::MessageNode::up() {
 		char host[NI_MAXHOST] = "";
 		char ip[NI_MAXHOST] = "";
 
-		int r = getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, NULL, 0, 0);
-		int s = getnameinfo((struct sockaddr *) &client_addr, client_size, ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+		getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, NULL, 0, 0);
+		getnameinfo((struct sockaddr *) &client_addr, client_size, ip, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
 
 		if(client_sock == -1) {
 			std::this_thread::sleep_for(msgpp::MessageNode::increment);
@@ -211,7 +211,6 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::push", "cannot connect to destination"));
 	}
 
-
 	int result = -1;
 	size_t n_bytes = 0;
 
@@ -254,7 +253,6 @@ std::string msgpp::MessageNode::pull(std::string hostname) {
 		if(!this->messages.empty()) {
 			for(size_t i = 0; i < this->messages.size(); ++i) {
 				msgpp::Message instance = this->messages.at(i);
-				std::cout << "ip: " << instance.get_ip() << ", hostname: " << instance.get_hostname() << std::endl;
 				bool match_h = (instance.get_hostname().compare("") == 0) || (instance.get_ip().compare("") == 0) || (hostname.compare("") == 0) || (hostname.compare(instance.get_hostname()) == 0) || (hostname.compare(instance.get_ip()) == 0);
 				if(match_h) {
 					target = i;

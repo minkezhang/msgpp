@@ -3,6 +3,8 @@
 #include <thread>
 #include <unistd.h>
 
+#include <iostream>
+
 #include "libs/catch/catch.hpp"
 #include "libs/exceptionpp/exception.h"
 
@@ -64,5 +66,4 @@ TEST_CASE("msgpp|msg_node-conn") {
 
 	REQUIRE_THROWS_AS(server->pull("fake"), exceptionpp::RuntimeError);
 	REQUIRE(server->pull("localhost").compare("foo") == 0);
-
 }
