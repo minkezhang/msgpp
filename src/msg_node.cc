@@ -68,7 +68,6 @@ void msgpp::MessageNode::up() {
 
 	status = getaddrinfo(NULL, port.str().c_str(), &info, &list);
 	if(list == NULL) {
-		std::cout << "PROBLEM: errno" << std::endl;
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot find address"));
 	}
 	server_sock = socket(list->ai_family, list->ai_socktype, list->ai_protocol);
@@ -86,6 +85,8 @@ void msgpp::MessageNode::up() {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot listen on server-side socket"));
 	}
 
+	// use sockaddr_storage for protocol-agnostic IP storage
+	//	cf. http://bit.ly/1ukHOQ8
 	struct sockaddr_storage client_addr;
 	socklen_t client_size;
 
@@ -100,7 +101,6 @@ void msgpp::MessageNode::up() {
 			sleep(1);
 		} else {
 			fcntl(client_sock, F_SETFL, O_NONBLOCK);
-			std::lock_guard<std::mutex> lock(this->messages_l);
 			std::stringstream len_buf;
 			std::stringstream msg_buf;
 			bool is_done = 0;
@@ -139,7 +139,20 @@ void msgpp::MessageNode::up() {
 			}
 			if(is_done && (msg_buf.str().size() == size)) {
 				std::cout << "buffer: " << msg_buf.str() << std::endl;
-				// queue stuff
+
+				char host[NI_MAXHOST];
+				char port[NI_MAXSERV];
+				int rc = getnameinfo((struct sockaddr *) &client_addr, client_size, host, NI_MAXHOST, port, NI_MAXSERV, NI_NUMERICHOST | NI_NUMERICSERV);
+				{
+					std::lock_guard<std::mutex> lock(this->messages_l);
+					if (rc == 0) {
+						this->messages.push_back(msgpp::Message("", host, std::stoll(std::string(port)), msg_buf.str()));
+					} else {
+						this->messages.push_back(msgpp::Message("", "", 0, msg_buf.str()));
+					}
+				}
+				std::cout << "done queuing" << std::endl;
+				std::cout << "messages length (UP): " << this->messages.size() << std::endl;
 			}
 			close(client_sock);
 		}
@@ -211,13 +224,15 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 std::string msgpp::MessageNode::pull(std::string hostname, size_t port) {
 	std::lock_guard<std::mutex> lock(this->messages_l);
 
+	std::cout << "message length (PULL): " << this->messages.size() << std::endl;
+
 	size_t target = 0;
 	bool is_found = 0;
 	for(size_t i = 0; i < this->timeout; ++i) {
 		if(!this->messages.empty()) {
 			for(size_t i = 0; i < this->messages.size(); ++i) {
-				bool match_h = (hostname.compare("") == 0) || (hostname.compare(this->messages.at(i).get_hostname()) == 0) || (hostname.compare(this->messages.at(i).get_ip()) == 0);
-				bool match_p = (port == 0) || (port == this->messages.at(i).get_port());
+				bool match_h = (this->messages.at(i).get_hostname().compare("") == 0) || (this->messages.at(i).get_ip().compare("") == 0) || (hostname.compare("") == 0) || (hostname.compare(this->messages.at(i).get_hostname()) == 0) || (hostname.compare(this->messages.at(i).get_ip()) == 0);
+				bool match_p = (this->messages.at(i).get_port() == 0) || (port == 0) || (port == this->messages.at(i).get_port());
 				if(match_h && match_p) {
 					target = i;
 					is_found = 1;
@@ -232,7 +247,7 @@ std::string msgpp::MessageNode::pull(std::string hostname, size_t port) {
 	}
 
 	if(!is_found) {
-		throw(exceptionpp::RuntimeError("msgpp::MessageNode::recv", "message does not exist"));
+		throw(exceptionpp::RuntimeError("msgpp::MessageNode::pull", "message does not exist"));
 	}
 
 	std::string message = this->messages.at(target).get_message();
