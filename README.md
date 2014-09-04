@@ -59,6 +59,7 @@ Features
 
 * IPv4 and IPv6 support -- send through the internet to other nodes
 * simple protocol to emulate -- `LEN:MSG` messages sent through the default `C` socket interface (no need to worry about buffer parsing, etc.)
+* atomic messages -- either the message is delivered in whole or dropped
 
 Contact
 ----
