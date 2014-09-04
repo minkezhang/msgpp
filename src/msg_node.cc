@@ -13,6 +13,8 @@
 #include <thread>
 #include <unistd.h>
 
+#include <iostream>
+
 #include "libs/exceptionpp/exception.h"
 
 #include "src/msg_node.h"
@@ -42,12 +44,12 @@ void msgpp::MessageNode::up() {
 		if(*flag == 1) {
 			return;
 		}
+		*flag = 1;
+		msgpp::MessageNode::instances.push_back(this->shared_from_this());
 		if(msgpp::MessageNode::instances.size() == 0) {
 			signal(SIGINT, msgpp::MessageNode::term);
 		}
-		msgpp::MessageNode::instances.push_back(this->shared_from_this());
 	}
-	*flag = 1;
 
 	std::stringstream port;
 	port << this->port;
@@ -117,6 +119,7 @@ void msgpp::MessageNode::up() {
 		}
 	}
 
+	// clean up client connections
 	for(size_t i = 0; i < this->threads.size(); ++i) {
 		this->threads.at(i)->join();
 	}
@@ -315,6 +318,9 @@ std::string msgpp::MessageNode::pull(std::string hostname, bool silent_fail) {
 	return(message);
 }
 
+/**
+ * SIGINT handler -- terminate all running MessageNode instances
+ */
 void msgpp::MessageNode::term(int p) {
 	std::lock_guard<std::mutex> lock(msgpp::MessageNode::l);
 	for(std::vector<std::shared_ptr<msgpp::MessageNode>>::iterator it = msgpp::MessageNode::instances.begin(); it != msgpp::MessageNode::instances.end(); ++it) {
