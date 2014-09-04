@@ -8,7 +8,7 @@ Installation
 
 ```bash
 git clone https://github.com/cripplet/msgpp.git
-cd giga
+cd msgpp
 git submodule update --init --recursive
 make test
 ```
