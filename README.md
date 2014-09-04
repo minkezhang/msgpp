@@ -25,7 +25,21 @@ git submodule foreach --recursive git pull
 Example
 ----
 
+A working example can be found in `tutorial/` -- the `Makefile` contained should compile as-is.
+
+```bash
+cd tutorial/
+make
+```
+
+Replace the `tutorial/external/msgpp` symbolic link with a `git clone` of the `msgpp` repo will make `tutorial/` a standalone project -- this is the preferred method for 
+initializing new repositories with `msgpp`.
+
 ```cpp
+/**
+ * example usage
+ */
+
 // init two nodes with IPv6 support and with timeout of two seconds
 auto s = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8088, msgpp::MessageNode::ipv6, 2));
 auto c = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8090, msgpp::MessageNode::ipv6, 2));
