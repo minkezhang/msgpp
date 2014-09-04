@@ -31,7 +31,7 @@ namespace msgpp {
 			 *	else, set set ai_family = AF_UNSPEC in ::up
 			 * timeout -- instance time metric (in seconds) to handle non-blocking sockets
 			 */
-			MessageNode(size_t port, uint8_t protocol = ipv4, size_t timeout = 2);
+			MessageNode(size_t port = 0, uint8_t protocol = ipv4, size_t timeout = 2);
 
 			uint8_t get_protocol();
 			size_t get_port();
