@@ -13,8 +13,6 @@
 #include <thread>
 #include <unistd.h>
 
-#include <iostream>
-
 #include "libs/exceptionpp/exception.h"
 
 #include "src/msg_node.h"
@@ -44,11 +42,11 @@ void msgpp::MessageNode::up() {
 		if(*flag == 1) {
 			return;
 		}
-		*flag = 1;
-		msgpp::MessageNode::instances.push_back(this->shared_from_this());
 		if(msgpp::MessageNode::instances.size() == 0) {
 			signal(SIGINT, msgpp::MessageNode::term);
 		}
+		*flag = 1;
+		msgpp::MessageNode::instances.push_back(this->shared_from_this());
 	}
 
 	std::stringstream port;

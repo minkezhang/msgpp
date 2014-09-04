@@ -3,9 +3,6 @@
 #include <thread>
 #include <unistd.h>
 
-#include <sstream>
-#include <iostream>
-
 #include "libs/catch/catch.hpp"
 #include "libs/exceptionpp/exception.h"
 
