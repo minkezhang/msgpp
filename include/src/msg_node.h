@@ -6,6 +6,8 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <sys/socket.h>
+#include <thread>
 #include <vector>
 
 namespace msgpp {
