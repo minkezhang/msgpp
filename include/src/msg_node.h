@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <sys/socket.h>
+#include <signal.h>
 #include <thread>
 #include <vector>
 
@@ -98,6 +99,7 @@ namespace msgpp {
 			static std::chrono::milliseconds increment;
 			static const size_t size = 1024;
 			static const size_t max_conn = 100;
+			static sighandler_t handler;
 	};
 }
 

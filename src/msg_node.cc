@@ -26,6 +26,7 @@ std::string msgpp::Message::get_message() { return(this->message); }
 std::vector<std::shared_ptr<msgpp::MessageNode>> msgpp::MessageNode::instances;
 std::mutex msgpp::MessageNode::l;
 std::chrono::milliseconds msgpp::MessageNode::increment = std::chrono::milliseconds(200);
+sighandler_t msgpp::MessageNode::handler;
 
 msgpp::MessageNode::MessageNode(size_t port, uint8_t protocol, size_t timeout) : protocol(protocol), port(port), timeout(timeout) {
 	this->flag = std::shared_ptr<std::atomic<bool>> (new std::atomic<bool> (0));
@@ -43,7 +44,7 @@ void msgpp::MessageNode::up() {
 			return;
 		}
 		if(msgpp::MessageNode::instances.size() == 0) {
-			signal(SIGINT, msgpp::MessageNode::term);
+			msgpp::MessageNode::handler = signal(SIGINT, msgpp::MessageNode::term);
 		}
 		*flag = 1;
 		msgpp::MessageNode::instances.push_back(this->shared_from_this());
@@ -325,4 +326,7 @@ void msgpp::MessageNode::term(int p) {
 		(*it)->dn();
 	}
 	msgpp::MessageNode::instances.clear();
+	// install old sighandler
+	//	cf. http://bit.ly/1unilFS
+	signal(SIGINT, msgpp::MessageNode::handler);
 }
