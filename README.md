@@ -26,26 +26,31 @@ Example
 ----
 
 ```cpp
-// init two server nodes with IPv6 support and with timeout of two seconds
+// init two nodes with IPv6 support and with timeout of two seconds
 auto s = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8088, msgpp::MessageNode::ipv6, 2));
 auto c = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8090, msgpp::MessageNode::ipv6, 2));
 
 // allow 's' to receive messages
 auto ts = std::thread(&msgpp::MessageNode::up, &*s);
 
-// send a message "foo" to the server
+// send a message "foo" to the 's'
 c->push("foo", "localhost", s->get_port());
 
-// get the most recent message sent to the server
+// get the oldest (FIFO) message sent to the 's'
 std::string resp = s->pull();
 
 // allow 'c' to also recieve messages
 auto tc = std::thread(&msgpp::MessageNode::up, &*t);
 
-// send a response to 'c' from 's'
-s->push("foo-resp", "localhost", c->get_port());
+// send a response to 'c' from 's' -- the last argument 'true' allows MessageNode::push to return
+//	without throwing an exception in the case the message was not delivered
+s->push("foo-resp", "localhost", c->get_port(), true);
 
-resp = c->pull();
+// get the oldest message sent to 'c'
+//	first argument is a hostname / ip filter (i.e. "127.0.0.1" and "localhost"), and
+//	the second indicates MessageNode::pull should fail silently and return without throwing
+//	an exception in case a message is not found
+resp = c->pull("", true);
 
 // shut down all servers within this process
 raise(SIGINT);
