@@ -33,7 +33,7 @@ auto c = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8090, msgpp
 // allow 's' to receive messages
 auto ts = std::thread(&msgpp::MessageNode::up, &*s);
 
-// send a message "foo" to the 's'
+// send a message "foo" to 's'
 c->push("foo", "localhost", s->get_port());
 
 // get the oldest (FIFO) message sent to the 's'
@@ -64,7 +64,7 @@ Features
 
 * IPv4 and IPv6 support -- send through the internet to other nodes
 * simple protocol to emulate -- `LEN:MSG` messages sent through the default `C` socket interface (no need to worry about buffer parsing, etc.)
-* atomic messages -- either the message is delivered in whole or dropped
+* atomic messages -- either the message is delivered in whole or dropped by the receiving node
 
 Contact
 ----
