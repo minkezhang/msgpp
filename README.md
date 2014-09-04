@@ -50,7 +50,7 @@ auto ts = std::thread(&msgpp::MessageNode::up, &*s);
 // send a message "foo" to 's'
 c->push("foo", "localhost", s->get_port());
 
-// get the oldest (FIFO) message sent to the 's'
+// get the oldest (FIFO) message sent to 's'
 std::string resp = s->pull();
 
 // allow 'c' to also recieve messages
@@ -58,7 +58,7 @@ auto tc = std::thread(&msgpp::MessageNode::up, &*t);
 
 // send a response to 'c' from 's' -- the last argument 'true' allows MessageNode::push to return
 //	without throwing an exception in the case the message was not delivered
-s->push("foo-resp", "localhost", c->get_port(), true);
+s->push("foo-resp", "127.0.0.1", c->get_port(), true);
 
 // get the oldest message sent to 'c'
 //	first argument is a hostname / ip filter (i.e. "127.0.0.1" and "localhost"), and
@@ -76,7 +76,7 @@ tc.join();
 Features
 ----
 
-* IPv4 and IPv6 support -- send through the internet to other nodes
+* IPv4 and IPv6 support -- talk to nodes halfway around the world in the same manner as talking to nodes in the local network
 * simple protocol to emulate -- `LEN:MSG` messages sent through the default `C` socket interface (no need to worry about buffer parsing, etc.)
 * atomic messages -- either the message is delivered in whole or dropped by the receiving node
 
