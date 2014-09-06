@@ -40,6 +40,11 @@ namespace msgpp {
 			size_t get_port();
 			size_t get_timeout();
 
+			/**
+			 * returns 1 if the node is currently running the server (i.e. if MessageNode::up has been invoked)
+			 */
+			bool get_status();
+
 			void set_timeout(size_t timeout);
 
 			/**

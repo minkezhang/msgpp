@@ -35,6 +35,7 @@ msgpp::MessageNode::MessageNode(size_t port, uint8_t protocol, size_t timeout) :
 uint8_t msgpp::MessageNode::get_protocol() { return(this->protocol); }
 size_t msgpp::MessageNode::get_port() { return(this->port); }
 size_t msgpp::MessageNode::get_timeout() { return(this->timeout); }
+bool msgpp::MessageNode::get_status() { return(*(this->flag)); }
 void msgpp::MessageNode::set_timeout(size_t timeout) { this->timeout = timeout; }
 
 void msgpp::MessageNode::up() {

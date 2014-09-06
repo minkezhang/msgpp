@@ -22,12 +22,16 @@ TEST_CASE("msgpp|msg_node") {
 
 	sleep(1);
 
+	REQUIRE(n->get_status() == true);
+
 	// send signal to kill nodes
 	raise(SIGINT);
 
 	for(std::vector<std::thread>::iterator it = t.begin(); it != t.end(); ++it) {
 		it->join();
 	}
+
+	REQUIRE(n->get_status() == false);
 
 	// ensure we can do this repeatedly
 	t.clear();
