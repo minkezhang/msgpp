@@ -34,11 +34,12 @@ namespace msgpp {
 			 *	else, set set ai_family = AF_UNSPEC in ::up
 			 * timeout -- instance time metric (in seconds) to handle non-blocking sockets
 			 */
-			MessageNode(size_t port = 0, uint8_t protocol = ipv4, size_t timeout = 2);
+			MessageNode(size_t port = 0, uint8_t protocol = ipv4, size_t timeout = 2, size_t max_conn = 100);
 
 			uint8_t get_protocol();
 			size_t get_port();
 			size_t get_timeout();
+			size_t get_max_conn();
 
 			/**
 			 * returns 1 if the node is currently running the server (i.e. if MessageNode::up has been invoked)
@@ -89,6 +90,7 @@ namespace msgpp {
 			uint8_t protocol;
 			size_t port;
 			size_t timeout;
+			size_t max_conn;
 
 			std::vector<std::shared_ptr<std::thread>> threads;
 			std::shared_ptr<std::atomic<bool>> flag;
@@ -103,7 +105,6 @@ namespace msgpp {
 
 			static std::chrono::milliseconds increment;
 			static const size_t size = 1024;
-			static const size_t max_conn = 100;
 			static sighandler_t handler;
 	};
 }

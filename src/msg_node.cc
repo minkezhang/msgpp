@@ -28,13 +28,14 @@ std::mutex msgpp::MessageNode::l;
 std::chrono::milliseconds msgpp::MessageNode::increment = std::chrono::milliseconds(200);
 sighandler_t msgpp::MessageNode::handler;
 
-msgpp::MessageNode::MessageNode(size_t port, uint8_t protocol, size_t timeout) : protocol(protocol), port(port), timeout(timeout) {
+msgpp::MessageNode::MessageNode(size_t port, uint8_t protocol, size_t timeout, size_t max_conn) : protocol(protocol), port(port), timeout(timeout), max_conn(max_conn) {
 	this->flag = std::shared_ptr<std::atomic<bool>> (new std::atomic<bool> (0));
 }
 
 uint8_t msgpp::MessageNode::get_protocol() { return(this->protocol); }
 size_t msgpp::MessageNode::get_port() { return(this->port); }
 size_t msgpp::MessageNode::get_timeout() { return(this->timeout); }
+size_t msgpp::MessageNode::get_max_conn() { return(this->max_conn); }
 bool msgpp::MessageNode::get_status() { return(*(this->flag)); }
 void msgpp::MessageNode::set_timeout(size_t timeout) { this->timeout = timeout; }
 
@@ -90,7 +91,7 @@ void msgpp::MessageNode::up() {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::up", "cannot bind server-side socket"));
 	}
 
-	status = listen(server_sock, msgpp::MessageNode::max_conn);
+	status = listen(server_sock, this->get_max_conn());
 	if(status == -1) {
 		freeaddrinfo(list);
 		shutdown(server_sock, SHUT_RDWR);
