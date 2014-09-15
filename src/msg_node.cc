@@ -13,21 +13,20 @@
 #include <thread>
 #include <unistd.h>
 
-#include <iostream>
-
 #include "libs/exceptionpp/exception.h"
 
 #include "src/msg_node.h"
 
-msgpp::Message::Message(std::string ip, std::string hostname, std::string message) : ip(ip), hostname(hostname), message(message) {}
+msgpp::Message::Message(size_t id, std::string ip, std::string hostname, std::string message) : id(id), ip(ip), hostname(hostname), message(message) {}
 
+size_t msgpp::Message::get_identifier() { return(this->id); }
 std::string msgpp::Message::get_ip() { return(this->ip); }
 std::string msgpp::Message::get_hostname() { return(this->hostname); }
 std::string msgpp::Message::get_message() { return(this->message); }
 
 std::vector<std::shared_ptr<msgpp::MessageNode>> msgpp::MessageNode::instances;
-std::mutex msgpp::MessageNode::l;
-std::chrono::milliseconds msgpp::MessageNode::increment = std::chrono::milliseconds(200);
+std::recursive_mutex msgpp::MessageNode::l;
+std::chrono::milliseconds msgpp::MessageNode::increment = std::chrono::milliseconds(100);
 sighandler_t msgpp::MessageNode::handler;
 
 msgpp::MessageNode::MessageNode(size_t port, uint8_t protocol, size_t timeout, size_t max_conn) : protocol(protocol), port(port), timeout(timeout), max_conn(max_conn) {
@@ -43,7 +42,7 @@ void msgpp::MessageNode::set_timeout(size_t timeout) { this->timeout = timeout; 
 
 void msgpp::MessageNode::up() {
 	{
-		std::lock_guard<std::mutex> lock(msgpp::MessageNode::l);
+		std::lock_guard<std::recursive_mutex> lock(msgpp::MessageNode::l);
 		if(*flag == 1) {
 			return;
 		}
@@ -188,28 +187,18 @@ void msgpp::MessageNode::dispatch(int client_sock, struct sockaddr_storage clien
 
 	if(is_done && (msg_buf.str().length() >= size)) {
 		std::lock_guard<std::mutex> lock(this->messages_l);
-		this->messages.push_back(msgpp::Message(ip, host, msg_buf.str().substr(0, size)));
+		this->messages.push_back(msgpp::Message(++this->count, ip, host, msg_buf.str().substr(0, size)));
 	}
 	shutdown(client_sock, SHUT_RDWR);
 	close(client_sock);
 }
 
 void msgpp::MessageNode::dn() {
-	std::lock_guard<std::mutex> lock(msgpp::MessageNode::l);
+	std::lock_guard<std::recursive_mutex> lock(msgpp::MessageNode::l);
 	if(*(this->flag) == 0) {
 		return;
 	}
 	*(this->flag) = 0;
-
-	// remove self from list of running nodes
-	size_t target = 0;
-	for(size_t i = 0; i < msgpp::MessageNode::instances.size(); ++i) {
-		if(msgpp::MessageNode::instances.at(i) == this->shared_from_this()) {
-			target = i;
-			break;
-		}
-	}
-	msgpp::MessageNode::instances.erase(msgpp::MessageNode::instances.begin() + target);
 
 	// restore signal handler if no more instances are running
 	if(msgpp::MessageNode::instances.size() == 0) {
@@ -306,19 +295,18 @@ size_t msgpp::MessageNode::push(std::string message, std::string hostname, size_
 }
 
 std::string msgpp::MessageNode::pull(std::string hostname, bool silent_fail) {
-	std::lock_guard<std::mutex> lock(this->messages_l);
-
 	size_t target = 0;
 	bool is_found = 0;
 
 	time_t start = time(NULL);
 	while(((size_t) time(NULL) - start) < this->timeout) {
+		std::lock_guard<std::mutex> lock(this->messages_l);
 		if(!this->messages.empty()) {
-			for(size_t i = 0; i < this->messages.size(); ++i) {
-				msgpp::Message instance = this->messages.at(i);
+			for(std::vector<msgpp::Message>::iterator it = this->messages.begin(); it != this->messages.end(); ++it) {
+				msgpp::Message instance = *it;
 				bool match_h = (instance.get_hostname().compare("") == 0) || (instance.get_ip().compare("") == 0) || (hostname.compare("") == 0) || (hostname.compare(instance.get_hostname()) == 0) || (hostname.compare(instance.get_ip()) == 0);
 				if(match_h) {
-					target = i;
+					target = it->get_identifier();
 					is_found = 1;
 					break;
 				}
@@ -335,8 +323,19 @@ std::string msgpp::MessageNode::pull(std::string hostname, bool silent_fail) {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::pull", "message does not exist"));
 	}
 
-	std::string message = this->messages.at(target).get_message();
-	this->messages.erase(this->messages.begin() + target);
+	std::string message;
+	{
+		std::lock_guard<std::mutex> lock(this->messages_l);
+		auto index = this->messages.end();
+		for(std::vector<msgpp::Message>::iterator it = this->messages.begin(); it != this->messages.end(); ++it) {
+			msgpp::Message instance = *it;
+			if(it->get_identifier() == target) {
+				index = it;
+				message = it->get_message();
+			}
+		}
+		this->messages.erase(index);
+	}
 	return(message);
 }
 
@@ -344,7 +343,7 @@ std::string msgpp::MessageNode::pull(std::string hostname, bool silent_fail) {
  * SIGINT handler -- terminate all running MessageNode instances
  */
 void msgpp::MessageNode::term(int p) {
-	std::lock_guard<std::mutex> lock(msgpp::MessageNode::l);
+	std::lock_guard<std::recursive_mutex> lock(msgpp::MessageNode::l);
 	for(std::vector<std::shared_ptr<msgpp::MessageNode>>::iterator it = msgpp::MessageNode::instances.begin(); it != msgpp::MessageNode::instances.end(); ++it) {
 		(*it)->dn();
 	}

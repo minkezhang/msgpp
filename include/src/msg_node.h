@@ -14,13 +14,15 @@
 namespace msgpp {
 	class Message {
 		public:
-			Message(std::string ip, std::string hostname, std::string message);
+			Message(size_t id, std::string ip, std::string hostname, std::string message);
 
+			size_t get_identifier();
 			std::string get_ip();
 			std::string get_hostname();
 			std::string get_message();
 
 		private:
+			size_t id;
 			std::string ip;
 			std::string hostname;
 
@@ -91,6 +93,7 @@ namespace msgpp {
 			size_t port;
 			size_t timeout;
 			size_t max_conn;
+			size_t count;
 
 			std::vector<std::shared_ptr<std::thread>> threads;
 			std::shared_ptr<std::atomic<bool>> flag;
@@ -101,7 +104,7 @@ namespace msgpp {
 			void dispatch(int client_sock, struct sockaddr_storage client_addr, socklen_t client_size);
 
 			static std::vector<std::shared_ptr<MessageNode>> instances;
-			static std::mutex l;
+			static std::recursive_mutex l;
 
 			static std::chrono::milliseconds increment;
 			static const size_t size = 1024;
