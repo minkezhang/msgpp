@@ -13,6 +13,8 @@
 #include <thread>
 #include <unistd.h>
 
+#include <iostream>
+
 #include "libs/exceptionpp/exception.h"
 
 #include "src/msg_node.h"
@@ -193,7 +195,26 @@ void msgpp::MessageNode::dispatch(int client_sock, struct sockaddr_storage clien
 }
 
 void msgpp::MessageNode::dn() {
+	std::lock_guard<std::mutex> lock(msgpp::MessageNode::l);
+	if(*(this->flag) == 0) {
+		return;
+	}
 	*(this->flag) = 0;
+
+	// remove self from list of running nodes
+	size_t target = 0;
+	for(size_t i = 0; i < msgpp::MessageNode::instances.size(); ++i) {
+		if(msgpp::MessageNode::instances.at(i) == this->shared_from_this()) {
+			target = i;
+			break;
+		}
+	}
+	msgpp::MessageNode::instances.erase(msgpp::MessageNode::instances.begin() + target);
+
+	// restore signal handler if no more instances are running
+	if(msgpp::MessageNode::instances.size() == 0) {
+		signal(SIGINT, msgpp::MessageNode::handler);
+	}
 }
 
 size_t msgpp::MessageNode::query() {
