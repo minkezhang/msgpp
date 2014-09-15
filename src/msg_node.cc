@@ -300,15 +300,18 @@ std::string msgpp::MessageNode::pull(std::string hostname, bool silent_fail) {
 
 	time_t start = time(NULL);
 	while(((size_t) time(NULL) - start) < this->timeout) {
-		std::lock_guard<std::mutex> lock(this->messages_l);
-		if(!this->messages.empty()) {
-			for(std::vector<msgpp::Message>::iterator it = this->messages.begin(); it != this->messages.end(); ++it) {
-				msgpp::Message instance = *it;
-				bool match_h = (instance.get_hostname().compare("") == 0) || (instance.get_ip().compare("") == 0) || (hostname.compare("") == 0) || (hostname.compare(instance.get_hostname()) == 0) || (hostname.compare(instance.get_ip()) == 0);
-				if(match_h) {
-					target = it->get_identifier();
-					is_found = 1;
-					break;
+		// lock during iteration, but unlock during sleep to give the queue an opportunity to fill up again
+		{
+			std::lock_guard<std::mutex> lock(this->messages_l);
+			if(!this->messages.empty()) {
+				for(std::vector<msgpp::Message>::iterator it = this->messages.begin(); it != this->messages.end(); ++it) {
+					msgpp::Message instance = *it;
+					bool match_h = (instance.get_hostname().compare("") == 0) || (instance.get_ip().compare("") == 0) || (hostname.compare("") == 0) || (hostname.compare(instance.get_hostname()) == 0) || (hostname.compare(instance.get_ip()) == 0);
+					if(match_h) {
+						target = it->get_identifier();
+						is_found = 1;
+						break;
+					}
 				}
 			}
 		}
