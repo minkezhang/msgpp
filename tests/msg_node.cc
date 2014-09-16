@@ -9,6 +9,7 @@
 #include "src/msg_node.h"
 
 #define NETWORK_TOLERANCE 500
+
 TEST_CASE("msgpp|msg_node") {
 	auto n = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8080));
 	auto m = std::shared_ptr<msgpp::MessageNode> (new msgpp::MessageNode(8081));
@@ -77,7 +78,7 @@ TEST_CASE("msgpp|msg_node-conn") {
 
 	t = std::thread(&msgpp::MessageNode::up, &*server);
 
-	size_t n_attempts = 1000;
+	size_t n_attempts = N_THREADS;
 
 	std::vector<std::thread> threads;
 	for(size_t i = 0; i < n_attempts; ++i) {
