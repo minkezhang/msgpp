@@ -77,6 +77,7 @@ TEST_CASE("msgpp|msg_node-conn") {
 	REQUIRE(server->pull("localhost").compare("foo") == 0);
 
 	t = std::thread(&msgpp::MessageNode::up, &*server);
+	sleep(1);
 
 	size_t n_attempts = N_THREADS;
 
