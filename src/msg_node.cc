@@ -32,8 +32,6 @@ sighandler_t msgpp::MessageNode::handler;
 msgpp::MessageNode::MessageNode(size_t port, uint8_t protocol, size_t timeout, size_t max_conn) : protocol(protocol), port(port), timeout(timeout), max_conn(max_conn) {
 	this->flag = std::shared_ptr<std::atomic<bool>> (new std::atomic<bool> (0));
 	this->count = 0;
-	this->threads = std::vector<std::shared_ptr<std::thread>> ();
-	this->messages = std::vector<msgpp::Message> ();
 }
 
 uint8_t msgpp::MessageNode::get_protocol() { return(this->protocol); }
