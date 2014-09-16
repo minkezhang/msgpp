@@ -31,6 +31,9 @@ sighandler_t msgpp::MessageNode::handler;
 
 msgpp::MessageNode::MessageNode(size_t port, uint8_t protocol, size_t timeout, size_t max_conn) : protocol(protocol), port(port), timeout(timeout), max_conn(max_conn) {
 	this->flag = std::shared_ptr<std::atomic<bool>> (new std::atomic<bool> (0));
+	this->count = 0;
+	this->threads = std::vector<std::shared_ptr<std::thread>> ();
+	this->messages = std::vector<msgpp::Message> ();
 }
 
 uint8_t msgpp::MessageNode::get_protocol() { return(this->protocol); }
@@ -326,15 +329,15 @@ std::string msgpp::MessageNode::pull(std::string hostname, bool silent_fail) {
 		throw(exceptionpp::RuntimeError("msgpp::MessageNode::pull", "message does not exist"));
 	}
 
-	std::string message;
+	std::string message = "";
 	{
 		std::lock_guard<std::mutex> lock(this->messages_l);
 		auto index = this->messages.end();
 		for(std::vector<msgpp::Message>::iterator it = this->messages.begin(); it != this->messages.end(); ++it) {
 			msgpp::Message instance = *it;
-			if(it->get_identifier() == target) {
+			if(instance.get_identifier() == target) {
 				index = it;
-				message = it->get_message();
+				message = instance.get_message();
 			}
 		}
 		this->messages.erase(index);
