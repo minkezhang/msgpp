@@ -26,7 +26,7 @@ std::string msgpp::Message::get_message() { return(this->message); }
 
 std::vector<std::shared_ptr<msgpp::MessageNode>> msgpp::MessageNode::instances;
 std::recursive_mutex msgpp::MessageNode::l;
-std::chrono::milliseconds msgpp::MessageNode::increment = std::chrono::milliseconds(100);
+std::chrono::milliseconds msgpp::MessageNode::increment = std::chrono::milliseconds(50);
 sighandler_t msgpp::MessageNode::handler;
 
 msgpp::MessageNode::MessageNode(size_t port, uint8_t protocol, size_t timeout, size_t max_conn) : protocol(protocol), port(port), timeout(timeout), max_conn(max_conn) {
@@ -58,6 +58,8 @@ void msgpp::MessageNode::up() {
 	port << this->port;
 
 	int server_sock, status;
+
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
 	struct addrinfo info;
 	struct addrinfo *list;
 	memset(&info, 0, sizeof(info));
@@ -120,6 +122,7 @@ void msgpp::MessageNode::up() {
 			std::shared_ptr<std::thread> t (new std::thread(&msgpp::MessageNode::dispatch, this, client_sock, client_addr, client_size));
 			this->threads.push_back(t);
 		}
+		std::this_thread::sleep_for(msgpp::MessageNode::increment);
 	}
 
 	// clean up client connections
